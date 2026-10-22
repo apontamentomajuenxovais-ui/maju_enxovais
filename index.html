@@ -255,7 +255,7 @@
           <h3 class="text-base md:text-lg font-bold text-slate-800 mb-3">Cadastrar Funcionário</h3>
           <form onsubmit="addOperador(event)" class="flex gap-2">
             <input type="text" id="cad-op-nome" required placeholder="Nome do Funcionário" class="flex-1 border rounded-lg p-2.5 text-sm">
-            <button type="submit" class="bg-slate-800 text-white font-bold px-4 rounded-lg text-sm">Salvar</button>
+            <button type="submit" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 rounded-lg text-sm">Salvar</button>
           </form>
           <ul id="lista-operadores" class="mt-4 divide-y text-xs md:text-sm"></ul>
         </div>
@@ -312,7 +312,7 @@
               </div>
             </div>
 
-            <button type="submit" class="w-full bg-slate-800 text-white font-bold p-2.5 rounded-lg text-sm">Salvar Máquina</button>
+            <button type="submit" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold p-2.5 rounded-lg text-sm">Salvar Máquina</button>
           </form>
           <ul id="lista-maquinas" class="mt-4 divide-y text-xs md:text-sm"></ul>
         </div>
@@ -485,7 +485,7 @@
     }
 
     window.salvarApontamento = async function(e) {
-      e.preventDefault();
+      if(e) e.preventDefault();
       
       const dtInput = document.getElementById('apt-datetime').value;
       const dataHora = dtInput ? new Date(dtInput).toISOString() : new Date().toISOString();
@@ -500,14 +500,17 @@
         refugo: parseInt(document.getElementById('apt-refugo').value)
       };
       
-      await addDoc(collection(db, "apontamentos"), novo);
-      
-      document.getElementById('apt-produto').value = '';
-      document.getElementById('apt-qtd').value = '';
-      document.getElementById('apt-refugo').value = '0';
-      definirDataHoraAtual();
-      
-      alert('Apontamento salvo na nuvem com sucesso!');
+      try {
+        await addDoc(collection(db, "apontamentos"), novo);
+        document.getElementById('apt-produto').value = '';
+        document.getElementById('apt-qtd').value = '';
+        document.getElementById('apt-refugo').value = '0';
+        definirDataHoraAtual();
+        alert('Apontamento salvo na nuvem com sucesso!');
+      } catch (erro) {
+        console.error("Erro ao salvar apontamento:", erro);
+        alert("Erro ao salvar apontamento no banco de dados.");
+      }
     };
 
     function renderApontamentosHoje() {
@@ -765,14 +768,24 @@
       window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
     };
 
-    // CADASTROS NO FIREBASE
+    // CADASTROS NO FIREBASE (COM ALERTAS E TRATAMENTO DE ERROS)
     window.addOperador = async function(e) {
-      e.preventDefault();
+      if(e) e.preventDefault();
       const input = document.getElementById('cad-op-nome');
-      const nome = input ? input.value.trim() : '';
+      if(!input) return;
+      
+      const nome = input.value.trim();
       if(nome) {
-        await addDoc(collection(db, "operadores"), { nome });
-        if(input) input.value = '';
+        try {
+          await addDoc(collection(db, "operadores"), { nome });
+          input.value = '';
+          alert('Funcionário cadastrado com sucesso!');
+        } catch (erro) {
+          console.error("Erro ao cadastrar operador:", erro);
+          alert("Erro ao salvar no banco de dados. Verifique a conexão.");
+        }
+      } else {
+        alert("Digite o nome do funcionário.");
       }
     };
 
@@ -783,9 +796,11 @@
     };
 
     window.addMaquina = async function(e) {
-      e.preventDefault();
+      if(e) e.preventDefault();
       const input = document.getElementById('cad-maq-nome');
-      const nome = input ? input.value.trim() : '';
+      if(!input) return;
+
+      const nome = input.value.trim();
       
       let f1_lim = 0, f1_val = 0, f2_lim = 0, f2_val = 0, f3_lim = 0, f3_val = 0;
 
@@ -799,19 +814,27 @@
       }
 
       if(nome) {
-        await addDoc(collection(db, "maquinas"), {
-          nome, f1_lim, f1_val, f2_lim, f2_val, f3_lim, f3_val
-        });
-        
-        if(input) input.value = '';
-        if(modoGestorAtivo) {
-          const el1 = document.getElementById('cad-maq-f1-lim'); if(el1) el1.value = '';
-          const el2 = document.getElementById('cad-maq-f1-val'); if(el2) el2.value = '';
-          const el3 = document.getElementById('cad-maq-f2-lim'); if(el3) el3.value = '';
-          const el4 = document.getElementById('cad-maq-f2-val'); if(el4) el4.value = '';
-          const el5 = document.getElementById('cad-maq-f3-lim'); if(el5) el5.value = '';
-          const el6 = document.getElementById('cad-maq-f3-val'); if(el6) el6.value = '';
+        try {
+          await addDoc(collection(db, "maquinas"), {
+            nome, f1_lim, f1_val, f2_lim, f2_val, f3_lim, f3_val
+          });
+          
+          input.value = '';
+          if(modoGestorAtivo) {
+            const el1 = document.getElementById('cad-maq-f1-lim'); if(el1) el1.value = '';
+            const el2 = document.getElementById('cad-maq-f1-val'); if(el2) el2.value = '';
+            const el3 = document.getElementById('cad-maq-f2-lim'); if(el3) el3.value = '';
+            const el4 = document.getElementById('cad-maq-f2-val'); if(el4) el4.value = '';
+            const el5 = document.getElementById('cad-maq-f3-lim'); if(el5) el5.value = '';
+            const el6 = document.getElementById('cad-maq-f3-val'); if(el6) el6.value = '';
+          }
+          alert('Máquina cadastrada com sucesso!');
+        } catch (erro) {
+          console.error("Erro ao cadastrar máquina:", erro);
+          alert("Erro ao salvar máquina no banco de dados.");
         }
+      } else {
+        alert("Digite o nome da máquina.");
       }
     };
 
