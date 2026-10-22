@@ -1,10 +1,331 @@
-<!-- FIREBASE SDKs (TEMPO REAL E NUVEM) -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MAJU ENXOVAIS - Gestão & Controle de Produção</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body {
+      overflow-x: hidden;
+      touch-action: manipulation;
+    }
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+    @media print {
+      body * { visibility: hidden; }
+      #area-impressao, #area-impressao * { visibility: visible; }
+      #area-impressao { position: absolute; left: 0; top: 0; width: 100%; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen pb-6">
+
+  <!-- NAVBAR -->
+  <nav class="bg-slate-900 text-white shadow-lg sticky top-0 z-50 no-print">
+    <div class="max-w-7xl mx-auto px-3 py-2.5 md:px-4 md:py-3 flex justify-between items-center">
+      <div class="flex items-center space-x-2 md:space-x-3">
+        <div class="bg-amber-500 text-slate-950 p-1.5 md:p-2 rounded-lg font-black text-lg md:text-xl">ME</div>
+        <div>
+          <h1 class="font-bold text-sm md:text-lg leading-tight">MAJU ENXOVAIS</h1>
+          <p class="text-[10px] md:text-xs text-amber-400" id="status-modo">Modo Operador (Valores Ocultos)</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-1 md:space-x-2">
+        <button onclick="mudarAba('apontamento')" id="tab-apontamento" class="px-2.5 py-1.5 md:px-3 md:py-2 rounded-lg text-xs md:text-sm font-semibold bg-amber-500 text-slate-950">Apontar</button>
+        <button onclick="mudarAba('relatorios')" id="tab-relatorios" class="px-2.5 py-1.5 md:px-3 md:py-2 rounded-lg text-xs md:text-sm font-semibold text-slate-300 hover:bg-slate-800">Relatórios</button>
+        <button onclick="mudarAba('cadastros')" id="tab-cadastros" class="px-2.5 py-1.5 md:px-3 md:py-2 rounded-lg text-xs md:text-sm font-semibold text-slate-300 hover:bg-slate-800">Cadastros</button>
+        <button onclick="toggleModoGestor()" id="btn-gestor" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700">🔒 Gestor</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-7xl mx-auto p-3 md:p-6">
+    <!-- ABA APONTAMENTO -->
+    <div id="sec-apontamento" class="space-y-4 md:space-y-6">
+      
+      <!-- PAINEL DE ACUMULADO DO DIA -->
+      <div class="bg-white p-4 md:p-5 rounded-xl shadow-sm border border-slate-200">
+        <div class="flex flex-wrap justify-between items-center gap-2 mb-2">
+          <h3 class="text-sm md:text-base font-bold text-slate-700 uppercase tracking-wide">Acumulado do Dia (Hoje)</h3>
+          <span class="text-xs bg-amber-100 text-amber-800 font-bold px-2.5 py-1 rounded-full" id="lbl-data-hoje"></span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="bg-slate-50 p-3 rounded-lg border">
+            <p class="text-[10px] md:text-xs text-slate-500 font-semibold uppercase">Total Peças OK</p>
+            <p class="text-xl md:text-2xl font-black text-indigo-600" id="hoje-total-ok">0</p>
+          </div>
+          <div class="bg-slate-50 p-3 rounded-lg border">
+            <p class="text-[10px] md:text-xs text-slate-500 font-semibold uppercase">Total Refugos</p>
+            <p class="text-xl md:text-2xl font-black text-red-500" id="hoje-total-ref">0</p>
+          </div>
+          <div class="bg-slate-50 p-3 rounded-lg border">
+            <p class="text-[10px] md:text-xs text-slate-500 font-semibold uppercase">Apontamentos</p>
+            <p class="text-xl md:text-2xl font-black text-slate-800" id="hoje-total-registros">0</p>
+          </div>
+          <div class="bg-slate-50 p-3 rounded-lg border">
+            <p class="text-[10px] md:text-xs text-slate-500 font-semibold uppercase">Eficiência</p>
+            <p class="text-xl md:text-2xl font-black text-emerald-600" id="hoje-eficiencia">100%</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- FORMULÁRIO DE NOVO APONTAMENTO -->
+      <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200">
+        <h2 class="text-lg md:text-xl font-bold text-slate-800 mb-4 flex items-center">
+          <svg class="w-5 h-5 mr-2 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          Novo Apontamento de Produção
+        </h2>
+        <form onsubmit="salvarApontamento(event)" class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Máquina / Setor</label>
+            <select id="apt-maquina" required class="w-full border rounded-lg p-2.5 text-sm"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Operador 1 (Principal)</label>
+            <select id="apt-op1" required class="w-full border rounded-lg p-2.5 text-sm"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Operador 2 (Dupla / Opcional)</label>
+            <select id="apt-op2" class="w-full border rounded-lg p-2.5 text-sm"></select>
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Produto em Produção</label>
+            <input type="text" id="apt-produto" required placeholder="Ex: Jogo de Cama Casal 100% Algodão" class="w-full border rounded-lg p-2.5 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Qtd Produzida (Peças)</label>
+            <input type="number" id="apt-qtd" required min="1" placeholder="0" class="w-full border rounded-lg p-2.5 text-sm font-bold text-indigo-700">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Qtd Refugo/Perdas</label>
+            <input type="number" id="apt-refugo" value="0" min="0" class="w-full border rounded-lg p-2.5 text-sm font-bold text-red-600">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Data e Hora</label>
+            <input type="datetime-local" id="apt-datetime" required class="w-full border rounded-lg p-2.5 text-sm font-semibold">
+          </div>
+          <div class="flex items-end">
+            <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold p-3 md:p-2.5 rounded-lg shadow flex items-center justify-center">
+              Registrar Produção
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- APONTAMENTOS DO DIA -->
+      <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200">
+        <h3 class="text-base md:text-lg font-bold text-slate-800 mb-3">Apontamentos Realizados Hoje (Sincronizado)</h3>
+        <div class="overflow-x-auto border rounded-lg">
+          <table class="w-full text-left text-xs md:text-sm">
+            <thead class="bg-slate-50 border-b">
+              <tr>
+                <th class="p-2 md:p-3">Hora</th>
+                <th class="p-2 md:p-3">Máquina</th>
+                <th class="p-2 md:p-3">Equipe</th>
+                <th class="p-2 md:p-3">Produto</th>
+                <th class="p-2 md:p-3 text-center">Qtd Ok</th>
+                <th class="p-2 md:p-3 text-center">Refugo</th>
+                <th class="p-2 md:p-3 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tb-hoje" class="divide-y"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ABA RELATÓRIOS -->
+    <div id="sec-relatorios" class="hidden space-y-4 md:space-y-6">
+      <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200">
+        <div class="flex flex-wrap justify-between items-center gap-3 border-b pb-4 mb-4 md:mb-6">
+          <h2 class="text-lg md:text-xl font-bold text-slate-800 flex items-center">
+            <svg class="w-5 h-5 mr-2 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+            Relatório Consolidado & Desempenho
+          </h2>
+          <div class="flex flex-wrap gap-2 no-print w-full sm:w-auto">
+            <button onclick="exportarExcelOperadores()" class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-lg text-xs md:text-sm shadow">
+              📥 Exportar Excel (CSV)
+            </button>
+            <button onclick="imprimirRelatorio()" class="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-900 text-white font-bold px-3 py-2 rounded-lg text-xs md:text-sm shadow">Imprimir / PDF</button>
+            <button onclick="enviarWhatsApp()" class="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-2 rounded-lg text-xs md:text-sm shadow">WhatsApp</button>
+          </div>
+        </div>
+
+        <!-- FILTROS DE DATA -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4 md:mb-6 no-print bg-slate-50 p-3 rounded-lg border">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Data Inicial</label>
+            <input type="date" id="rel-data-ini" onchange="filtrarRelatorio()" class="w-full border rounded-lg p-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Data Final</label>
+            <input type="date" id="rel-data-fim" onchange="filtrarRelatorio()" class="w-full border rounded-lg p-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Máquina</label>
+            <select id="rel-filtro-maquina" onchange="filtrarRelatorio()" class="w-full border rounded-lg p-2 text-sm">
+              <option value="">Todas as Máquinas</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Operador</label>
+            <select id="rel-filtro-operador" onchange="filtrarRelatorio()" class="w-full border rounded-lg p-2 text-sm">
+              <option value="">Todos os Operadores</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- ÁREA IMPRESSA -->
+        <div id="area-impressao" class="space-y-4 md:space-y-6">
+          <div class="text-center pb-3 border-b">
+            <h1 class="text-xl md:text-2xl font-black text-slate-900">MAJU ENXOVAIS</h1>
+            <p class="text-[10px] md:text-xs text-slate-500 uppercase tracking-widest font-bold">Relatório de Produção & Produtividade</p>
+            <p class="text-xs text-slate-600 mt-1" id="lbl-periodo">Período Selecionado</p>
+          </div>
+
+          <!-- CARDS CONSOLIDADOS -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+            <div class="bg-indigo-50 border border-indigo-200 p-2.5 md:p-4 rounded-xl text-center">
+              <p class="text-[10px] md:text-xs text-indigo-600 font-bold uppercase">Produzido</p>
+              <p class="text-xl md:text-3xl font-black text-indigo-900" id="card-total">0</p>
+            </div>
+            <div class="bg-red-50 border border-red-200 p-2.5 md:p-4 rounded-xl text-center">
+              <p class="text-[10px] md:text-xs text-red-600 font-bold uppercase">Refugos</p>
+              <p class="text-xl md:text-3xl font-black text-red-900" id="card-refugo">0</p>
+            </div>
+            <div class="bg-emerald-50 border border-emerald-200 p-2.5 md:p-4 rounded-xl text-center">
+              <p class="text-[10px] md:text-xs text-emerald-600 font-bold uppercase">Eficiência</p>
+              <p class="text-xl md:text-3xl font-black text-emerald-900" id="card-eficiencia">100%</p>
+            </div>
+            <div class="bg-amber-50 border border-amber-200 p-2.5 md:p-4 rounded-xl text-center">
+              <p class="text-[10px] md:text-xs text-amber-700 font-bold uppercase">Total Prêmios</p>
+              <p class="text-xl md:text-3xl font-black text-amber-900" id="card-premio">***</p>
+            </div>
+          </div>
+
+          <!-- RESUMO POR OPERADOR -->
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <h4 class="text-sm font-bold text-slate-800 mb-3 uppercase tracking-wide">Resumo por Operador & Desempenho</h4>
+            <div class="overflow-x-auto border rounded-lg">
+              <table class="w-full text-left text-xs md:text-sm">
+                <thead class="bg-slate-100 border-b font-bold text-slate-700">
+                  <tr>
+                    <th class="p-2 md:p-3">Operador</th>
+                    <th class="p-2 md:p-3">Máquina / Setor</th>
+                    <th class="p-2 md:p-3 text-center">Qtd Produzida</th>
+                    <th class="p-2 md:p-3 text-center">Refugos</th>
+                    <th class="p-2 md:p-3 text-center">Faixa Atingida</th>
+                    <th class="p-2 md:p-3 text-right">Prêmio (R$)</th>
+                  </tr>
+                </thead>
+                <tbody id="tb-resumo-operadores" class="divide-y"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- TABELA DETALHADA -->
+          <div class="overflow-x-auto border rounded-lg">
+            <table class="w-full text-left text-xs md:text-sm">
+              <thead class="bg-slate-100 border-b">
+                <tr>
+                  <th class="p-2 md:p-3 border-r">Data / Hora</th>
+                  <th class="p-2 md:p-3 border-r">Máquina</th>
+                  <th class="p-2 md:p-3 border-r">Equipe</th>
+                  <th class="p-2 md:p-3 border-r">Produto</th>
+                  <th class="p-2 md:p-3 text-center border-r">Produção</th>
+                  <th class="p-2 md:p-3 text-center border-r">Refugo</th>
+                  <th class="p-2 md:p-3 text-right no-print">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tb-relatorio" class="divide-y"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ABA CADASTROS -->
+    <div id="sec-cadastros" class="hidden space-y-4 md:space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        <!-- Cadastrar Funcionário -->
+        <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200">
+          <h3 class="text-base md:text-lg font-bold text-slate-800 mb-3">Cadastrar Funcionário</h3>
+          <form onsubmit="addOperador(event)" class="flex gap-2">
+            <input type="text" id="cad-op-nome" required placeholder="Nome do Funcionário" class="flex-1 border rounded-lg p-2.5 text-sm">
+            <button type="submit" class="bg-slate-800 text-white font-bold px-4 rounded-lg text-sm">Salvar</button>
+          </form>
+          <ul id="lista-operadores" class="mt-4 divide-y text-xs md:text-sm"></ul>
+        </div>
+
+        <!-- Cadastrar Máquina -->
+        <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200">
+          <h3 class="text-base md:text-lg font-bold text-slate-800 mb-3">Cadastrar Máquina & Regras de Prêmios</h3>
+          
+          <form onsubmit="addMaquina(event)" class="space-y-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Nome da Máquina / Setor</label>
+              <input type="text" id="cad-maq-nome" required placeholder="Ex: Máquina Costura 01" class="w-full border rounded-lg p-2 text-sm">
+            </div>
+            
+            <div id="painel-valores-cadastro" class="bg-slate-50 p-3 rounded-lg border space-y-2">
+              <p class="text-xs font-bold text-slate-700 uppercase flex justify-between">
+                <span>Faixas de Premiação (Confidencial)</span>
+                <span id="badge-lock" class="text-red-500 font-bold">🔒 Requer Senha de Gestor</span>
+              </p>
+              
+              <div id="campos-premiação-gestor" class="space-y-2 opacity-50 pointer-events-none">
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] text-slate-500 font-semibold">Até Qtd (Faixa 1)</label>
+                    <input type="number" id="cad-maq-f1-lim" placeholder="Ex: 500" class="w-full border rounded p-1.5 text-xs">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] text-slate-500 font-semibold">Valor Prêmio F1 (R$)</label>
+                    <input type="number" step="0.01" id="cad-maq-f1-val" placeholder="Ex: 20.00" class="w-full border rounded p-1.5 text-xs">
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] text-slate-500 font-semibold">Até Qtd (Faixa 2)</label>
+                    <input type="number" id="cad-maq-f2-lim" placeholder="Ex: 1000" class="w-full border rounded p-1.5 text-xs">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] text-slate-500 font-semibold">Valor Prêmio F2 (R$)</label>
+                    <input type="number" step="0.01" id="cad-maq-f2-val" placeholder="Ex: 50.00" class="w-full border rounded p-1.5 text-xs">
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[10px] text-slate-500 font-semibold">Até Qtd (Faixa 3)</label>
+                    <input type="number" id="cad-maq-f3-lim" placeholder="Ex: 1500" class="w-full border rounded p-1.5 text-xs">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] text-slate-500 font-semibold">Valor Prêmio F3 (R$)</label>
+                    <input type="number" step="0.01" id="cad-maq-f3-val" placeholder="Ex: 100.00" class="w-full border rounded p-1.5 text-xs">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" class="w-full bg-slate-800 text-white font-bold p-2.5 rounded-lg text-sm">Salvar Máquina</button>
+          </form>
+          <ul id="lista-maquinas" class="mt-4 divide-y text-xs md:text-sm"></ul>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- FIREBASE SDKs E LÓGICA DO SISTEMA -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, onSnapshot, addDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
 
-    // 🟢 SUAS CHAVES REAIS DO PROJETO MAJU ENXOVAIS
+    // 🟢 SUAS CHAVES DO PROJETO MAJU ENXOVAIS
     const firebaseConfig = {
       apiKey: "AIzaSyDl1gUSxd2v3iirh4Eozs9KibkQ6M_NcIc",
       authDomain: "maju-enxovais.firebaseapp.com",
@@ -15,9 +336,7 @@
       measurementId: "G-991NH0S2Q1"
     };
 
-    // Inicialização do Firebase e Firestore
     const app = initializeApp(firebaseConfig);
-    const analytics = getAnalytics(app);
     const db = getFirestore(app);
 
     let senhaGestor = localStorage.getItem('maju_senha_gestor') || "1234";
@@ -532,3 +851,5 @@
       }
     }
   </script>
+</body>
+</html>
