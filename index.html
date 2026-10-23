@@ -182,7 +182,7 @@
         <div id="area-impressao" class="space-y-4 md:space-y-6">
           <div class="text-center pb-3 border-b">
             <h1 class="text-xl md:text-2xl font-black text-slate-900">MAJU ENXOVAIS</h1>
-            <p class="text-[10px] md:text-xs text-slate-500 uppercase tracking-widest font-bold">Relatório de Produção & Produtividade</p>
+            <p class="text-[10px] md:text-xs text-slate-500 uppercase tracking-widest font-bold">Relatório de Produção & Produtividade Multi-Máquinas</p>
             <p class="text-xs text-slate-600 mt-1" id="lbl-periodo">Período Selecionado</p>
           </div>
 
@@ -208,17 +208,19 @@
 
           <!-- RESUMO POR OPERADOR -->
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <h4 class="text-sm font-bold text-slate-800 mb-3 uppercase tracking-wide">Resumo por Operador & Desempenho</h4>
+            <h4 class="text-sm font-bold text-slate-800 mb-1 uppercase tracking-wide">Resumo Consolidado por Operador (Meta Ponderada Proporcional)</h4>
+            <p class="text-[11px] text-slate-500 mb-3">Calcula a porcentagem da meta acumulada em cada máquina em que o funcionário operou no período.</p>
             <div class="overflow-x-auto border rounded-lg">
               <table class="w-full text-left text-xs md:text-sm">
                 <thead class="bg-slate-100 border-b font-bold text-slate-700">
                   <tr>
                     <th class="p-2 md:p-3">Operador</th>
-                    <th class="p-2 md:p-3">Máquina / Setor</th>
-                    <th class="p-2 md:p-3 text-center">Qtd Produzida</th>
+                    <th class="p-2 md:p-3">Máquinas Operadas</th>
+                    <th class="p-2 md:p-3 text-center">Qtd Total</th>
                     <th class="p-2 md:p-3 text-center">Refugos</th>
-                    <th class="p-2 md:p-3 text-center">Faixa Atingida</th>
-                    <th class="p-2 md:p-3 text-right">Prêmio (R$)</th>
+                    <th class="p-2 md:p-3 text-center">% Meta Global</th>
+                    <th class="p-2 md:p-3 text-center">Status</th>
+                    <th class="p-2 md:p-3 text-right">Prêmio Ponderado (R$)</th>
                   </tr>
                 </thead>
                 <tbody id="tb-resumo-operadores" class="divide-y"></tbody>
@@ -325,7 +327,6 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, onSnapshot, addDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // 🟢 SUAS CHAVES DO PROJETO MAJU ENXOVAIS
     const firebaseConfig = {
       apiKey: "AIzaSyDl1gUSxd2v3iirh4Eozs9KibkQ6M_NcIc",
       authDomain: "maju-enxovais.firebaseapp.com",
@@ -348,7 +349,6 @@
     window.apontamentosFiltradosAtuais = [];
     window.resumoOperadoresAtuais = [];
 
-    // SINCRONIZAÇÃO EM TEMPO REAL COM FIRESTORE
     onSnapshot(collection(db, "operadores"), (snapshot) => {
       window.operadores = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       carregarSelects();
@@ -359,6 +359,7 @@
       window.maquinasObj = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       carregarSelects();
       renderCadastros();
+      filtrarRelatorio();
     });
 
     onSnapshot(collection(db, "apontamentos"), (snapshot) => {
@@ -496,8 +497,8 @@
         op1: document.getElementById('apt-op1').value,
         op2: document.getElementById('apt-op2').value,
         produto: document.getElementById('apt-produto').value,
-        qtd: parseInt(document.getElementById('apt-qtd').value),
-        refugo: parseInt(document.getElementById('apt-refugo').value)
+        qtd: parseInt(document.getElementById('apt-qtd').value) || 0,
+        refugo: parseInt(document.getElementById('apt-refugo').value) || 0
       };
       
       try {
@@ -514,8 +515,11 @@
     };
 
     function renderApontamentosHoje() {
-      const hojeStr = new Date().toISOString().slice(0,10);
-      const doHoje = window.apontamentos.filter(a => a.data.startsWith(hojeStr));
+      const hojeStr = new Date().toLocaleDateString('sv-SE');
+      const doHoje = window.apontamentos.filter(a => {
+        const dStr = new Date(a.data).toLocaleDateString('sv-SE');
+        return dStr === hojeStr;
+      });
       
       let totOk = 0, totRef = 0;
       doHoje.forEach(a => { totOk += a.qtd; totRef += a.refugo; });
@@ -562,25 +566,61 @@
       }
     };
 
-    function calcularPremio(nomeMaquina, qtdProduzida) {
-      const maq = window.maquinasObj.find(m => m.nome === nomeMaquina);
-      if(!maq) return { faixa: "Sem Meta", valor: 0 };
+    // LÓGICA DE CÁLCULO DE META PONDERADA MULTI-MÁQUINAS
+    function calcularMetaPonderadaOperador(producaoPorMaquina) {
+      let percentualMetaTotal = 0;
+      let premioProporcionalTotal = 0;
+      let totalPeças = 0;
 
-      let faixa = "Abaixo do Mínimo";
-      let valor = 0;
+      // Para cada máquina em que o operador trabalhou
+      Object.keys(producaoPorMaquina).forEach(nomeMaquina => {
+        const qtdMaq = producaoPorMaquina[nomeMaquina];
+        totalPeças += qtdMaq;
+        const maq = window.maquinasObj.find(m => m.nome === nomeMaquina);
 
-      if(maq.f3_lim > 0 && qtdProduzida >= maq.f3_lim) {
-        faixa = `Faixa 3 (>= ${maq.f3_lim})`;
-        valor = maq.f3_val;
-      } else if(maq.f2_lim > 0 && qtdProduzida >= maq.f2_lim) {
-        faixa = `Faixa 2 (>= ${maq.f2_lim})`;
-        valor = maq.f2_val;
-      } else if(maq.f1_lim > 0 && qtdProduzida >= maq.f1_lim) {
-        faixa = `Faixa 1 (>= ${maq.f1_lim})`;
-        valor = maq.f1_val;
+        if (maq && Number(maq.f1_lim) > 0) {
+          const f1_lim = Number(maq.f1_lim);
+          const f1_val = Number(maq.f1_val) || 0;
+          const f2_lim = Number(maq.f2_lim) || 0;
+          const f2_val = Number(maq.f2_val) || 0;
+          const f3_lim = Number(maq.f3_lim) || 0;
+          const f3_val = Number(maq.f3_val) || 0;
+
+          // Fração da meta da Faixa 1 que este lote cobriu
+          const fracF1 = qtdMaq / f1_lim;
+          percentualMetaTotal += fracF1;
+
+          // Valor do prêmio proporcional gerado por esta máquina
+          if (f3_lim > 0 && qtdMaq >= f3_lim) {
+            premioProporcionalTotal += f3_val;
+          } else if (f2_lim > 0 && qtdMaq >= f2_lim) {
+            premioProporcionalTotal += f2_val;
+          } else {
+            premioProporcionalTotal += (fracF1 * f1_val);
+          }
+        }
+      });
+
+      const pctFormatado = (percentualMetaTotal * 100).toFixed(1);
+
+      // Trava de Bônus: Só ganha bonificação se o total ponderado atingir ao menos 100% (Faixa 1)
+      if (percentualMetaTotal >= 1.0) {
+        return {
+          pctTotal: percentualMetaTotal,
+          pctTexto: `${pctFormatado}%`,
+          atingiuMeta: true,
+          statusText: "Meta Atingida 🏆",
+          premio: premioProporcionalTotal
+        };
+      } else {
+        return {
+          pctTotal: percentualMetaTotal,
+          pctTexto: `${pctFormatado}%`,
+          atingiuMeta: false,
+          statusText: "Abaixo da Meta",
+          premio: 0
+        };
       }
-
-      return { faixa, valor };
     }
 
     window.filtrarRelatorio = function() {
@@ -595,31 +635,37 @@
       }
 
       window.apontamentosFiltradosAtuais = window.apontamentos.filter(a => {
-        const d = a.data.slice(0,10);
-        if(ini && d < ini) return false;
-        if(fim && d > fim) return false;
+        const dStr = new Date(a.data).toLocaleDateString('sv-SE');
+        if(ini && dStr < ini) return false;
+        if(fim && dStr > fim) return false;
         if(maqFiltro && a.maquina !== maqFiltro) return false;
         if(opFiltro && a.op1 !== opFiltro && a.op2 !== opFiltro) return false;
         return true;
       });
 
       let totQtd = 0, totRef = 0;
-      let agrupado = {};
+      let agrupadoOperadores = {};
 
       window.apontamentosFiltradosAtuais.forEach(f => { 
         totQtd += f.qtd; 
         totRef += f.refugo; 
 
-        const chave1 = `${f.op1}||${f.maquina}`;
-        if(!agrupado[chave1]) agrupado[chave1] = { operador: f.op1, maquina: f.maquina, qtd: 0, refugo: 0 };
-        agrupado[chave1].qtd += f.qtd;
-        agrupado[chave1].refugo += f.refugo;
+        // Registra Operador 1
+        if(!agrupadoOperadores[f.op1]) {
+          agrupadoOperadores[f.op1] = { operador: f.op1, maquinas: {}, totalQtd: 0, totalRefugo: 0 };
+        }
+        agrupadoOperadores[f.op1].totalQtd += f.qtd;
+        agrupadoOperadores[f.op1].totalRefugo += f.refugo;
+        agrupadoOperadores[f.op1].maquinas[f.maquina] = (agrupadoOperadores[f.op1].maquinas[f.maquina] || 0) + f.qtd;
 
+        // Registra Operador 2 (se houver dupla)
         if(f.op2) {
-          const chave2 = `${f.op2}||${f.maquina}`;
-          if(!agrupado[chave2]) agrupado[chave2] = { operador: f.op2, maquina: f.maquina, qtd: 0, refugo: 0 };
-          agrupado[chave2].qtd += f.qtd;
-          agrupado[chave2].refugo += f.refugo;
+          if(!agrupadoOperadores[f.op2]) {
+            agrupadoOperadores[f.op2] = { operador: f.op2, maquinas: {}, totalQtd: 0, totalRefugo: 0 };
+          }
+          agrupadoOperadores[f.op2].totalQtd += f.qtd;
+          agrupadoOperadores[f.op2].totalRefugo += f.refugo;
+          agrupadoOperadores[f.op2].maquinas[f.maquina] = (agrupadoOperadores[f.op2].maquinas[f.maquina] || 0) + f.qtd;
         }
       });
 
@@ -633,12 +679,19 @@
       const ef = totalGeral > 0 ? ((totQtd / totalGeral) * 100).toFixed(1) : 100;
       if(cardEf) cardEf.innerText = `${ef}%`;
 
-      window.resumoOperadoresAtuais = Object.values(agrupado).map(item => {
-        const resPremio = calcularPremio(item.maquina, item.qtd);
+      // Aplica a lógica Ponderada por Operador
+      window.resumoOperadoresAtuais = Object.values(agrupadoOperadores).map(item => {
+        const resPonderado = calcularMetaPonderadaOperador(item.maquinas);
+        const listaMaquinasStr = Object.keys(item.maquinas).join(', ');
         return {
-          ...item,
-          faixa: resPremio.faixa,
-          premio: resPremio.valor
+          operador: item.operador,
+          maquinasStr: listaMaquinasStr,
+          qtdTotal: item.totalQtd,
+          refugoTotal: item.totalRefugo,
+          pctTexto: resPonderado.pctTexto,
+          statusText: resPonderado.statusText,
+          atingiuMeta: resPonderado.atingiuMeta,
+          premio: resPonderado.premio
         };
       });
 
@@ -647,18 +700,20 @@
       
       if(tbodyResumo) {
         if(window.resumoOperadoresAtuais.length === 0) {
-          tbodyResumo.innerHTML = '<tr><td colspan="6" class="p-3 text-center text-slate-400">Nenhum operador com produção no período.</td></tr>';
+          tbodyResumo.innerHTML = '<tr><td colspan="7" class="p-3 text-center text-slate-400">Nenhum operador com produção no período.</td></tr>';
         } else {
           tbodyResumo.innerHTML = window.resumoOperadoresAtuais.map(r => {
             totalPremiosGeral += r.premio;
             const textoPremio = modoGestorAtivo ? `R$ ${r.premio.toFixed(2)}` : '*** (Sigiloso)';
+            const badgeClass = r.atingiuMeta ? 'bg-emerald-100 text-emerald-800 font-bold' : 'bg-slate-100 text-slate-600 font-medium';
             return `
               <tr>
                 <td class="p-2 md:p-3 font-semibold text-slate-800">${r.operador}</td>
-                <td class="p-2 md:p-3 text-slate-600">${r.maquina}</td>
-                <td class="p-2 md:p-3 text-center font-bold text-indigo-700">${r.qtd}</td>
-                <td class="p-2 md:p-3 text-center font-bold text-red-600">${r.refugo}</td>
-                <td class="p-2 md:p-3 text-center"><span class="bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded text-xs">${r.faixa}</span></td>
+                <td class="p-2 md:p-3 text-slate-600">${r.maquinasStr}</td>
+                <td class="p-2 md:p-3 text-center font-bold text-indigo-700">${r.qtdTotal}</td>
+                <td class="p-2 md:p-3 text-center font-bold text-red-600">${r.refugoTotal}</td>
+                <td class="p-2 md:p-3 text-center font-bold text-slate-700">${r.pctTexto}</td>
+                <td class="p-2 md:p-3 text-center"><span class="${badgeClass} px-2 py-0.5 rounded text-xs">${r.statusText}</span></td>
                 <td class="p-2 md:p-3 text-right font-black ${modoGestorAtivo ? 'text-emerald-700' : 'text-slate-400'}">${textoPremio}</td>
               </tr>
             `;
@@ -669,7 +724,6 @@
       const cardPremio = document.getElementById('card-premio');
       if(cardPremio) cardPremio.innerText = modoGestorAtivo ? `R$ ${totalPremiosGeral.toFixed(2)}` : '***';
 
-      // Tabela Detalhada
       const tbody = document.getElementById('tb-relatorio');
       if(!tbody) return;
 
@@ -710,14 +764,14 @@
         alert("Não há dados consolidados de operadores para exportar no período selecionado.");
         return;
       }
-      let csvContent = "data:text/csv;charset=utf-8,Operador,Maquina,Qtd Produzida,Refugos,Faixa Atingida,Premio (R$)\n";
+      let csvContent = "data:text/csv;charset=utf-8,Operador,Maquinas Operadas,Qtd Total,Refugos,Pct Meta Global,Status,Premio Ponderado (R$)\n";
       window.resumoOperadoresAtuais.forEach(r => {
-        csvContent += `"${r.operador}","${r.maquina}",${r.qtd},${r.refugo},"${r.faixa}",${r.premio.toFixed(2)}\n`;
+        csvContent += `"${r.operador}","${r.maquinasStr}",${r.qtdTotal},${r.refugoTotal},"${r.pctTexto}","${r.statusText}",${r.premio.toFixed(2)}\n`;
       });
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement("a");
       link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `Producao_Premio_Operadores_${new Date().toISOString().slice(0,10)}.csv`);
+      link.setAttribute("download", `Producao_Premio_Ponderado_${new Date().toISOString().slice(0,10)}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -731,7 +785,7 @@
       const totRef = document.getElementById('card-refugo')?.innerText || '0';
       const ef = document.getElementById('card-eficiencia')?.innerText || '100%';
 
-      let msg = `🏭 *MAJU ENXOVAIS - RELATÓRIO DE PRODUÇÃO*\n`;
+      let msg = `🏭 *MAJU ENXOVAIS - RELATÓRIO PONDERADO DE PRODUÇÃO*\n`;
       msg += `📌 *${periodo}*\n\n`;
       msg += `📊 *RESUMO CONSOLIDADO*\n`;
       msg += `✅ *Total Produzido:* ${totQtd} peças\n`;
@@ -740,12 +794,14 @@
 
       if(modoGestorAtivo) {
         const totPremio = document.getElementById('card-premio')?.innerText || 'R$ 0.00';
-        msg += `💰 *Total Prêmios:* ${totPremio}\n\n`;
-        msg += `🏆 *PRÊMIOS POR OPERADOR:*\n`;
+        msg += `💰 *Total Prêmios Ponderados:* ${totPremio}\n\n`;
+        msg += `🏆 *PRÊMIOS PONDERADOS POR OPERADOR:*\n`;
         msg += `-----------------------------------\n`;
         window.resumoOperadoresAtuais.forEach((r) => {
-          msg += `👤 *${r.operador}* (${r.maquina})\n`;
-          msg += `📦 Qtd: ${r.qtd} | 🎖️ ${r.faixa}\n`;
+          msg += `👤 *${r.operador}*\n`;
+          msg += `⚙️ Máquinas: ${r.maquinasStr}\n`;
+          msg += `📦 Qtd Total: ${r.qtdTotal} | 🎯 % Meta: *${r.pctTexto}*\n`;
+          msg += `🎖️ Status: ${r.statusText}\n`;
           msg += `💵 Prêmio: *R$ ${r.premio.toFixed(2)}*\n`;
           msg += `-----------------------------------\n`;
         });
@@ -768,7 +824,6 @@
       window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
     };
 
-    // CADASTROS NO FIREBASE (COM ALERTAS E TRATAMENTO DE ERROS)
     window.addOperador = async function(e) {
       if(e) e.preventDefault();
       const input = document.getElementById('cad-op-nome');
@@ -865,7 +920,7 @@
             </div>
             <div class="text-[11px] text-slate-500 bg-slate-50 p-2 rounded">
               ${modoGestorAtivo ? 
-                `F1: >= ${m.f1_lim} (R$ ${m.f1_val}) | F2: >= ${m.f2_lim} (R$ ${m.f2_val}) | F3: >= ${m.f3_lim} (R$ ${m.f3_val})` : 
+                `F1: >= ${m.f1_lim || 0} (R$ ${Number(m.f1_val || 0).toFixed(2)}) | F2: >= ${m.f2_lim || 0} (R$ ${Number(m.f2_val || 0).toFixed(2)}) | F3: >= ${m.f3_lim || 0} (R$ ${Number(m.f3_val || 0).toFixed(2)})` : 
                 `<em>Regras financeiras ocultas (Modo Operador)</em>`
               }
             </div>
