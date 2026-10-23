@@ -208,8 +208,8 @@
 
           <!-- RESUMO POR OPERADOR -->
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <h4 class="text-sm font-bold text-slate-800 mb-1 uppercase tracking-wide">Resumo Consolidado por Operador (Meta Ponderada Proporcional)</h4>
-            <p class="text-[11px] text-slate-500 mb-3">Calcula a porcentagem da meta acumulada em cada máquina em que o funcionário operou no período.</p>
+            <h4 class="text-sm font-bold text-slate-800 mb-1 uppercase tracking-wide">Resumo Consolidado por Operador (Valores Fixos por Faixa)</h4>
+            <p class="text-[11px] text-slate-500 mb-3">O prêmio é travado nos valores fixos da Faixa (F1, F2 ou F3) ao atingir o degrau de meta acumulada.</p>
             <div class="overflow-x-auto border rounded-lg">
               <table class="w-full text-left text-xs md:text-sm">
                 <thead class="bg-slate-100 border-b font-bold text-slate-700">
@@ -220,7 +220,7 @@
                     <th class="p-2 md:p-3 text-center">Refugos</th>
                     <th class="p-2 md:p-3 text-center">% Meta Global</th>
                     <th class="p-2 md:p-3 text-center">Status</th>
-                    <th class="p-2 md:p-3 text-right">Prêmio Ponderado (R$)</th>
+                    <th class="p-2 md:p-3 text-right">Prêmio Fixo (R$)</th>
                   </tr>
                 </thead>
                 <tbody id="tb-resumo-operadores" class="divide-y"></tbody>
@@ -566,61 +566,64 @@
       }
     };
 
-    // LÓGICA DE CÁLCULO DE META PONDERADA MULTI-MÁQUINAS
+    // LÓGICA DE CÁLCULO COM VALORES FIXOS (ARREDONDADO F1, F2, F3)
     function calcularMetaPonderadaOperador(producaoPorMaquina) {
       let percentualMetaTotal = 0;
-      let premioProporcionalTotal = 0;
       let totalPeças = 0;
+      let maquinaPrincipal = "";
+      let maiorQtdMaq = 0;
 
-      // Para cada máquina em que o operador trabalhou
+      // Identifica a máquina principal (onde o operador produziu mais) e soma as porcentagens
       Object.keys(producaoPorMaquina).forEach(nomeMaquina => {
         const qtdMaq = producaoPorMaquina[nomeMaquina];
         totalPeças += qtdMaq;
+
+        if (qtdMaq > maiorQtdMaq) {
+          maiorQtdMaq = qtdMaq;
+          maquinaPrincipal = nomeMaquina;
+        }
+
         const maq = window.maquinasObj.find(m => m.nome === nomeMaquina);
-
         if (maq && Number(maq.f1_lim) > 0) {
-          const f1_lim = Number(maq.f1_lim);
-          const f1_val = Number(maq.f1_val) || 0;
-          const f2_lim = Number(maq.f2_lim) || 0;
-          const f2_val = Number(maq.f2_val) || 0;
-          const f3_lim = Number(maq.f3_lim) || 0;
-          const f3_val = Number(maq.f3_val) || 0;
-
-          // Fração da meta da Faixa 1 que este lote cobriu
-          const fracF1 = qtdMaq / f1_lim;
-          percentualMetaTotal += fracF1;
-
-          // Valor do prêmio proporcional gerado por esta máquina
-          if (f3_lim > 0 && qtdMaq >= f3_lim) {
-            premioProporcionalTotal += f3_val;
-          } else if (f2_lim > 0 && qtdMaq >= f2_lim) {
-            premioProporcionalTotal += f2_val;
-          } else {
-            premioProporcionalTotal += (fracF1 * f1_val);
-          }
+          percentualMetaTotal += (qtdMaq / Number(maq.f1_lim));
         }
       });
 
       const pctFormatado = (percentualMetaTotal * 100).toFixed(1);
+      const maqObj = window.maquinasObj.find(m => m.nome === maquinaPrincipal);
 
-      // Trava de Bônus: Só ganha bonificação se o total ponderado atingir ao menos 100% (Faixa 1)
-      if (percentualMetaTotal >= 1.0) {
-        return {
-          pctTotal: percentualMetaTotal,
-          pctTexto: `${pctFormatado}%`,
-          atingiuMeta: true,
-          statusText: "Meta Atingida 🏆",
-          premio: premioProporcionalTotal
-        };
-      } else {
-        return {
-          pctTotal: percentualMetaTotal,
-          pctTexto: `${pctFormatado}%`,
-          atingiuMeta: false,
-          statusText: "Abaixo da Meta",
-          premio: 0
-        };
+      let premioFixo = 0;
+      let statusText = "Abaixo da Meta";
+      let atingiuMeta = false;
+
+      if (maqObj) {
+        const f1_val = Number(maqObj.f1_val) || 0;
+        const f2_val = Number(maqObj.f2_val) || f1_val;
+        const f3_val = Number(maqObj.f3_val) || f2_val;
+
+        // Arredondamento e travamento em valores cravados por degrau
+        if (percentualMetaTotal >= 3.0) {
+          premioFixo = f3_val;
+          statusText = "Faixa 3 Atingida 🏆";
+          atingiuMeta = true;
+        } else if (percentualMetaTotal >= 2.0) {
+          premioFixo = f2_val;
+          statusText = "Faixa 2 Atingida 🥈";
+          atingiuMeta = true;
+        } else if (percentualMetaTotal >= 1.0) {
+          premioFixo = f1_val;
+          statusText = "Faixa 1 Atingida 🥉";
+          atingiuMeta = true;
+        }
       }
+
+      return {
+        pctTotal: percentualMetaTotal,
+        pctTexto: `${pctFormatado}%`,
+        atingiuMeta: atingiuMeta,
+        statusText: statusText,
+        premio: premioFixo
+      };
     }
 
     window.filtrarRelatorio = function() {
@@ -658,7 +661,7 @@
         agrupadoOperadores[f.op1].totalRefugo += f.refugo;
         agrupadoOperadores[f.op1].maquinas[f.maquina] = (agrupadoOperadores[f.op1].maquinas[f.maquina] || 0) + f.qtd;
 
-        // Registra Operador 2 (se houver dupla)
+        // Registra Operador 2 (se houver)
         if(f.op2) {
           if(!agrupadoOperadores[f.op2]) {
             agrupadoOperadores[f.op2] = { operador: f.op2, maquinas: {}, totalQtd: 0, totalRefugo: 0 };
@@ -679,7 +682,7 @@
       const ef = totalGeral > 0 ? ((totQtd / totalGeral) * 100).toFixed(1) : 100;
       if(cardEf) cardEf.innerText = `${ef}%`;
 
-      // Aplica a lógica Ponderada por Operador
+      // Aplica a lógica Ponderada por Operador com Valores Fixos
       window.resumoOperadoresAtuais = Object.values(agrupadoOperadores).map(item => {
         const resPonderado = calcularMetaPonderadaOperador(item.maquinas);
         const listaMaquinasStr = Object.keys(item.maquinas).join(', ');
@@ -764,14 +767,14 @@
         alert("Não há dados consolidados de operadores para exportar no período selecionado.");
         return;
       }
-      let csvContent = "data:text/csv;charset=utf-8,Operador,Maquinas Operadas,Qtd Total,Refugos,Pct Meta Global,Status,Premio Ponderado (R$)\n";
+      let csvContent = "data:text/csv;charset=utf-8,Operador,Maquinas Operadas,Qtd Total,Refugos,Pct Meta Global,Status,Premio Fixo (R$)\n";
       window.resumoOperadoresAtuais.forEach(r => {
         csvContent += `"${r.operador}","${r.maquinasStr}",${r.qtdTotal},${r.refugoTotal},"${r.pctTexto}","${r.statusText}",${r.premio.toFixed(2)}\n`;
       });
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement("a");
       link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `Producao_Premio_Ponderado_${new Date().toISOString().slice(0,10)}.csv`);
+      link.setAttribute("download", `Producao_Premio_Fixo_${new Date().toISOString().slice(0,10)}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -794,8 +797,8 @@
 
       if(modoGestorAtivo) {
         const totPremio = document.getElementById('card-premio')?.innerText || 'R$ 0.00';
-        msg += `💰 *Total Prêmios Ponderados:* ${totPremio}\n\n`;
-        msg += `🏆 *PRÊMIOS PONDERADOS POR OPERADOR:*\n`;
+        msg += `💰 *Total Prêmios Fixos:* ${totPremio}\n\n`;
+        msg += `🏆 *PRÊMIOS FIXOS POR OPERADOR:*\n`;
         msg += `-----------------------------------\n`;
         window.resumoOperadoresAtuais.forEach((r) => {
           msg += `👤 *${r.operador}*\n`;
