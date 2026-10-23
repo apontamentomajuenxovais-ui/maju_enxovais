@@ -209,7 +209,7 @@
           <!-- RESUMO POR OPERADOR -->
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <h4 class="text-sm font-bold text-slate-800 mb-1 uppercase tracking-wide">Resumo Consolidado por Operador (Valores Fixos por Faixa)</h4>
-            <p class="text-[11px] text-slate-500 mb-3">O prêmio é travado nos valores fixos da Faixa (F1, F2 ou F3) ao atingir o degrau de meta acumulada.</p>
+            <p class="text-[11px] text-slate-500 mb-3">Calcula a equivalência acumulada das faixas entre as máquinas para definir o prêmio correto (F1, F2 ou F3).</p>
             <div class="overflow-x-auto border rounded-lg">
               <table class="w-full text-left text-xs md:text-sm">
                 <thead class="bg-slate-100 border-b font-bold text-slate-700">
@@ -566,17 +566,16 @@
       }
     };
 
-    // LÓGICA DE CÁLCULO COM VALORES FIXOS (ARREDONDADO F1, F2, F3)
+    // LÓGICA DE CÁLCULO DE FAIXAS (F1, F2, F3) MULTI-MÁQUINA
     function calcularMetaPonderadaOperador(producaoPorMaquina) {
-      let percentualMetaTotal = 0;
-      let totalPeças = 0;
+      let percentualF1Total = 0;
+      let percentualF2Total = 0;
+      let percentualF3Total = 0;
       let maquinaPrincipal = "";
       let maiorQtdMaq = 0;
 
-      // Identifica a máquina principal (onde o operador produziu mais) e soma as porcentagens
       Object.keys(producaoPorMaquina).forEach(nomeMaquina => {
         const qtdMaq = producaoPorMaquina[nomeMaquina];
-        totalPeças += qtdMaq;
 
         if (qtdMaq > maiorQtdMaq) {
           maiorQtdMaq = qtdMaq;
@@ -584,33 +583,39 @@
         }
 
         const maq = window.maquinasObj.find(m => m.nome === nomeMaquina);
-        if (maq && Number(maq.f1_lim) > 0) {
-          percentualMetaTotal += (qtdMaq / Number(maq.f1_lim));
+        if (maq) {
+          const f1_lim = Number(maq.f1_lim) || 0;
+          const f2_lim = Number(maq.f2_lim) || 0;
+          const f3_lim = Number(maq.f3_lim) || 0;
+
+          if (f1_lim > 0) percentualF1Total += (qtdMaq / f1_lim);
+          if (f2_lim > 0) percentualF2Total += (qtdMaq / f2_lim);
+          if (f3_lim > 0) percentualF3Total += (qtdMaq / f3_lim);
         }
       });
 
-      const pctFormatado = (percentualMetaTotal * 100).toFixed(1);
       const maqObj = window.maquinasObj.find(m => m.nome === maquinaPrincipal);
 
       let premioFixo = 0;
       let statusText = "Abaixo da Meta";
       let atingiuMeta = false;
+      let pctExibicao = (percentualF1Total * 100).toFixed(1);
 
       if (maqObj) {
         const f1_val = Number(maqObj.f1_val) || 0;
         const f2_val = Number(maqObj.f2_val) || f1_val;
         const f3_val = Number(maqObj.f3_val) || f2_val;
 
-        // Arredondamento e travamento em valores cravados por degrau
-        if (percentualMetaTotal >= 3.0) {
+        // Avaliação dos degraus F3, F2 e F1
+        if (percentualF3Total >= 1.0) {
           premioFixo = f3_val;
           statusText = "Faixa 3 Atingida 🏆";
           atingiuMeta = true;
-        } else if (percentualMetaTotal >= 2.0) {
+        } else if (percentualF2Total >= 1.0) {
           premioFixo = f2_val;
           statusText = "Faixa 2 Atingida 🥈";
           atingiuMeta = true;
-        } else if (percentualMetaTotal >= 1.0) {
+        } else if (percentualF1Total >= 1.0) {
           premioFixo = f1_val;
           statusText = "Faixa 1 Atingida 🥉";
           atingiuMeta = true;
@@ -618,8 +623,7 @@
       }
 
       return {
-        pctTotal: percentualMetaTotal,
-        pctTexto: `${pctFormatado}%`,
+        pctTexto: `${pctExibicao}%`,
         atingiuMeta: atingiuMeta,
         statusText: statusText,
         premio: premioFixo
@@ -682,7 +686,6 @@
       const ef = totalGeral > 0 ? ((totQtd / totalGeral) * 100).toFixed(1) : 100;
       if(cardEf) cardEf.innerText = `${ef}%`;
 
-      // Aplica a lógica Ponderada por Operador com Valores Fixos
       window.resumoOperadoresAtuais = Object.values(agrupadoOperadores).map(item => {
         const resPonderado = calcularMetaPonderadaOperador(item.maquinas);
         const listaMaquinasStr = Object.keys(item.maquinas).join(', ');
